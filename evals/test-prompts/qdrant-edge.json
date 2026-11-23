@@ -1,0 +1,52 @@
+{
+  "name": "qdrant-edge",
+  "product_area": "edge",
+  "skill_url": "https://skills.qdrant.tech/qdrant-edge/SKILL.md",
+  "prompt": "I'm building an offline-capable Python app on Qdrant Edge (robot, intermittent wifi). Three problems. (1) I bulk-upserted 50k points and search got noticeably slower right after. (2) I want to keep the shard fresh from our Qdrant Cloud collection and also get local edits back up to it. (3) For hybrid search I'm about to pip install a BM25 lib and write my own RRF. What am I getting wrong?",
+  "rubric": [
+    {
+      "type": "must",
+      "text": "The slowdown comes from Edge having no background optimizer: new points are searched by brute force until you call optimize after bulk writes, which builds the indexes and reclaims deletes."
+    },
+    {
+      "type": "must",
+      "text": "There's no built-in .sync(); pull via the dual-shard pattern (a mutable local-write shard plus an immutable shard restored from a server snapshot, queried together and refreshed on a schedule), downloading the snapshot yourself and applying it with unpack_snapshot/update_from_snapshot."
+    },
+    {
+      "type": "must",
+      "text": "Push is your own dual-write: enqueue each local upsert to a background worker that upserts to the server and buffers while offline."
+    },
+    {
+      "type": "must",
+      "text": "Don't add a BM25 library: Edge ranks BM25 natively from a full-text index with `scoring` enabled, queried with a `TextQuery` and no embedding model. Edge's BM25 embedder (Bm25, embed_document/embed_query) is only needed for server-compatible sparse vectors."
+    },
+    {
+      "type": "must",
+      "text": "Replace the custom RRF: Edge `query` accepts dense and BM25 (`TextQuery`) `prefetches` and fuses them with a `Fusion` query in one call, so rankings don't need combining in application code."
+    },
+    {
+      "type": "bonus",
+      "text": "Refresh incrementally with a partial snapshot from snapshot_manifest, not a full snapshot each cycle."
+    },
+    {
+      "type": "bonus",
+      "text": "Dense embeddings aren't in Edge — generate them on device with the separate fastembed package."
+    },
+    {
+      "type": "bonus",
+      "text": "Edge is beta — pin the version, since the API drifts."
+    },
+    {
+      "type": "avoid",
+      "text": "Blames the slowdown on hardware, data size, or BM25 setup instead of the missing optimize."
+    },
+    {
+      "type": "avoid",
+      "text": "Expects a built-in bidirectional .sync()/push, or untars/merges snapshot segments by hand."
+    },
+    {
+      "type": "avoid",
+      "text": "Keeps combining dense and keyword rankings in application code instead of prefetches with a Fusion query, or swaps embed_document/embed_query."
+    }
+  ]
+}
